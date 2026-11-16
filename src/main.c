@@ -6,6 +6,9 @@
 #include <inttypes.h>
 
 #include "iom361_r4.h"
+#include "sensor.h"
+
+#define START_TIME ((time_t) 1791273600)  // Placeholder clock
 
 int main(void) {
     /* Initialize iom361 */
@@ -21,9 +24,15 @@ int main(void) {
     _iom361_set_sensor1(15.0f, 60.0f);
     _iom361_set_switches(0x1);
 
-    uint32_t raw = iom361_readReg(base, TEMP_REG, &rc);
     uint32_t sw = iom361_readReg(base, SWITCHES_REG, &rc);
-    double temp = raw / 1048576.0 * 200.0 - 50.0;  // See: docs/AHT20.md
+
+    reading_t reading;
+    rc = sensor_read(base, START_TIME, &reading);
+
+    if (rc != 0) {
+        fprintf(stderr, "sensor_read failed: %d\n", rc);
+        return 1;
+    }
 
     if (sw & 0x1u) {  // REMOTE is switch 0
         iom361_writeReg(base, LEDS_REG, 0x1u, &rc);
@@ -31,8 +40,8 @@ int main(void) {
 
     iom361_writeReg(base, RGB_LED_REG, build_rgb_reg(1, 255, 0, 0), &rc);
 
-    printf("raw 0x%05" PRIX32 " = %.4f C, switches 0x%" PRIX32 "\n",
-        raw, temp, sw);
+    printf("temp %.1f C, rh %.1f %%RH, switches 0x%" PRIX32 "\n",
+        reading.temp_c, reading.rh_pct, sw);
 
     return 0;
 }

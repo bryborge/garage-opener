@@ -38,4 +38,8 @@ unity_dep = declare_dependency(
 test_sensor = executable('test_sensor', 'tests/test_sensor.c',
     dependencies : [garage_dep, unity_dep],
 )
+test_fsm = executable('test_fsm', 'tests/test_fsm.c',
+    dependencies : [garage_dep, unity_dep],
+)
 test('sensor', test_sensor)
+test('fsm', test_fsm)

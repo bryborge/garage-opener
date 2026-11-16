@@ -1,0 +1,197 @@
+/**
+ * @file test_fsm.c
+ * @brief Unit tests for the finite state machine module.
+ */
+#include <stdio.h>
+
+#include "unity.h"
+
+#include "fsm.h"
+
+/* Compare by name so that a failure reads "Expected 'OPEN' Was 'CLOSED'". */
+#define TEST_ASSERT_STATE(expected, actual) \
+    TEST_ASSERT_EQUAL_STRING(               \
+        fsm_state_name(expected),           \
+        fsm_state_name(actual)              \
+    )
+
+void setUp(void) {}
+
+void tearDown(void) {}
+
+/**
+ * Normal operation: Remote press opens the initially closed garage door.
+ * Once it is open, a second remote press closes it again. No logged events.
+ *
+ * CLOSED -> OPENING -> OPEN -> CLOSING -> CLOSED.
+ */
+static void test_fsm_step_normal_operation(void) {
+    state_t state = CLOSED;
+    action_t action;
+
+    state = fsm_step(state, E_REMOTE_PRESSED, &action);
+    TEST_ASSERT_STATE(OPENING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(state, E_TIMER_EXPIRED, &action);
+    TEST_ASSERT_STATE(OPEN, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(state, E_REMOTE_PRESSED, &action);
+    TEST_ASSERT_STATE(CLOSING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(state, E_TIMER_EXPIRED, &action);
+    TEST_ASSERT_STATE(CLOSED, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+}
+
+/**
+ * Rule: A blocked light barrier stops a closing door and logs the
+ * obstruction. When the pause is over, the door opens again. No logged event.
+ *
+ * CLOSING -> OBSTRUCTED -> OPENING.
+ */
+static void test_fsm_step_obstruction_while_closing(void) {
+    state_t state = CLOSING;
+    action_t action;
+
+    state = fsm_step(state, E_BARRIER_BLOCKED, &action);
+    TEST_ASSERT_STATE(OBSTRUCTED, state);
+    TEST_ASSERT_EQUAL_INT(A_LOG_OBSTRUCTION, action);
+
+    state = fsm_step(state, E_TIMER_EXPIRED, &action);
+    TEST_ASSERT_STATE(OPENING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+}
+
+/**
+ * Rule: A remote press at or below 1.0 C is refused while the door is
+ * closed. The door stays closed and the refusal is logged.
+ *
+ * CLOSED -> CLOSED.
+ */
+static void test_fsm_step_freezing_press_refused_when_closed(void) {
+    state_t state = CLOSED;
+    action_t action;
+
+    state = fsm_step(state, E_REMOTE_PRESSED_FREEZING, &action);
+    TEST_ASSERT_STATE(CLOSED, state);
+    TEST_ASSERT_EQUAL_INT(A_LOG_REFUSAL, action);
+}
+
+/**
+ * Rule: A remote press reverses a door that is in motion.
+ *
+ * OPENING -> CLOSING, and CLOSING -> OPENING.
+ */
+static void test_fsm_step_press_reverses_moving_door(void) {
+    state_t state;
+    action_t action;
+
+    state = fsm_step(OPENING, E_REMOTE_PRESSED, &action);
+    TEST_ASSERT_STATE(CLOSING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(CLOSING, E_REMOTE_PRESSED, &action);
+    TEST_ASSERT_STATE(OPENING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+}
+
+/**
+ * Rule: The freeze guard applies only to a closed door. In any other
+ * state a press at or below 1.0 C acts like a press above it, and no refusal
+ * is logged.
+ *
+ * OPENING -> CLOSING, OPEN -> CLOSING, and CLOSING -> OPENING.
+ */
+static void test_fsm_step_freezing_press_allowed_when_not_closed(void) {
+    state_t state;
+    action_t action;
+
+    state = fsm_step(OPENING, E_REMOTE_PRESSED_FREEZING, &action);
+    TEST_ASSERT_STATE(CLOSING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(OPEN, E_REMOTE_PRESSED_FREEZING, &action);
+    TEST_ASSERT_STATE(CLOSING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(CLOSING, E_REMOTE_PRESSED_FREEZING, &action);
+    TEST_ASSERT_STATE(OPENING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+}
+
+/**
+ * Rule: A blocked light barrier is ignored unless the door is closing.
+ * The state does not change and no obstruction is logged.
+ */
+static void test_fsm_step_barrier_ignored_when_not_closing(void) {
+    state_t state;
+    action_t action;
+
+    state = fsm_step(CLOSED, E_BARRIER_BLOCKED, &action);
+    TEST_ASSERT_STATE(CLOSED, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(OPENING, E_BARRIER_BLOCKED, &action);
+    TEST_ASSERT_STATE(OPENING, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(OPEN, E_BARRIER_BLOCKED, &action);
+    TEST_ASSERT_STATE(OPEN, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(OBSTRUCTED, E_BARRIER_BLOCKED, &action);
+    TEST_ASSERT_STATE(OBSTRUCTED, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+}
+
+/**
+ * Rule: A remote press is ignored while the door is obstructed, regardless of
+ * temperature, and is not logged as a refusal.
+ */
+static void test_fsm_step_press_ignored_when_obstructed(void) {
+    state_t state;
+    action_t action;
+
+    state = fsm_step(OBSTRUCTED, E_REMOTE_PRESSED, &action);
+    TEST_ASSERT_STATE(OBSTRUCTED, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+
+    state = fsm_step(OBSTRUCTED, E_REMOTE_PRESSED_FREEZING, &action);
+    TEST_ASSERT_STATE(OBSTRUCTED, state);
+    TEST_ASSERT_EQUAL_INT(A_NONE, action);
+}
+
+/**
+ * Every cell of the transition table is filled in. A cell left out of the
+ * table's initializer is zeroed, which gives it the action A_UNDEFINED.
+ */
+static void test_fsm_step_has_no_undefined_transition(void) {
+    for (int s = 0; s < N_STATES; s++) {
+        for (int e = 0; e < N_EVENTS; e++) {
+            action_t action;
+            fsm_step((state_t)s, (event_t)e, &action);
+
+            char cell[48];
+            snprintf(cell, sizeof cell, "state %s, event %d",
+                fsm_state_name((state_t)s), e);
+            TEST_ASSERT_NOT_EQUAL_INT_MESSAGE(A_UNDEFINED, action, cell);
+        }
+    }
+}
+
+int main(void) {
+    UNITY_BEGIN();
+    RUN_TEST(test_fsm_step_normal_operation);
+    RUN_TEST(test_fsm_step_obstruction_while_closing);
+    RUN_TEST(test_fsm_step_freezing_press_refused_when_closed);
+    RUN_TEST(test_fsm_step_press_reverses_moving_door);
+    RUN_TEST(test_fsm_step_freezing_press_allowed_when_not_closed);
+    RUN_TEST(test_fsm_step_barrier_ignored_when_not_closing);
+    RUN_TEST(test_fsm_step_press_ignored_when_obstructed);
+    RUN_TEST(test_fsm_step_has_no_undefined_transition);
+
+    return UNITY_END();
+}

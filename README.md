@@ -32,3 +32,5 @@ The [Unity](https://github.com/ThrowTheSwitch/Unity) test framework is used by M
 ```sh
 meson test -C build
 ```
+
+For verbose test output, run the above command with `-v`.

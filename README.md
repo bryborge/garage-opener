@@ -13,7 +13,7 @@ This project is built with [Meson](https://mesonbuild.com/). It builds the `gara
 ### Requirements
 
 - A C11 compiler
-- Meson 1.1 or later
+- Meson 1.7 or later
 - Ninja
 
 ### Installing
@@ -23,7 +23,11 @@ meson setup build
 meson compile -C build
 ```
 
-The program executable is in `build/garage_opener`.
+The program executable is in `build/garage_opener` and can be run with:
+
+```sh
+./build/garage_opener
+```
 
 ### Testing
 
@@ -34,3 +38,41 @@ meson test -C build
 ```
 
 For verbose test output, run the above command with `-v`.
+
+#### Test Coverage
+
+[gcovr](https://gcovr.com) is required for generating code coverage reports.
+
+1.  Enable coverage.
+
+    ```sh
+    meson configure build -Db_coverage=true
+    ```
+
+2.  Build everything.
+
+    ```sh
+    meson compile -C build
+    ```
+
+3.  Run test suite.
+
+    ```sh
+    meson test -C build
+    ```
+
+4.  Generate the coverage reports.
+
+    ```sh
+    ninja -C build coverage
+    ```
+
+Follow the terminal output and open the desired report (in `build/meson-logs/`).
+
+> [!IMPORTANT]
+>
+> Coverage counters accumulate across runs, including runs of `garage_opener` itself. To reset them before a test run:
+>
+> ```sh
+> ninja -C build clean-gcda
+> ```

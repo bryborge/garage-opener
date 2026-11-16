@@ -35,7 +35,7 @@ unity_dep = declare_dependency(
     dependencies : dependency('unity'),
     compile_args : '-DUNITY_INCLUDE_DOUBLE',
 )
-test_main = executable('test_main', 'tests/test_main.c',
-    dependencies : [iom361_dep, unity_dep],
+test_sensor = executable('test_sensor', 'tests/test_sensor.c',
+    dependencies : [garage_dep, unity_dep],
 )
-test('test_main', test_main)
+test('sensor', test_sensor)

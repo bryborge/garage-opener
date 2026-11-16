@@ -41,6 +41,14 @@ For verbose test output, run the above command with `-v`.
 
 #### Test Coverage
 
+> [!IMPORTANT]
+>
+> Coverage counters accumulate across runs, including runs of `garage_opener` itself. To reset them before a test run:
+>
+> ```sh
+> ninja -C build clean-gcda
+> ```
+
 [gcovr](https://gcovr.com) is required for generating code coverage reports.
 
 1.  Enable coverage.
@@ -68,11 +76,3 @@ For verbose test output, run the above command with `-v`.
     ```
 
 Follow the terminal output and open the desired report (in `build/meson-logs/`).
-
-> [!IMPORTANT]
->
-> Coverage counters accumulate across runs, including runs of `garage_opener` itself. To reset them before a test run:
->
-> ```sh
-> ninja -C build clean-gcda
-> ```

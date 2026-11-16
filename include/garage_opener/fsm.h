@@ -33,10 +33,24 @@ typedef enum {
     N_ACTIONS
 } action_t;
 
-/* Transitions */
-typedef struct {
-    state_t next;
-    action_t action;
-} transition_t;
+/**
+ * Get the name of a state. Asserts that state is in range.
+ *
+ * @param state The state to name.
+ * @return A string that is valid for the life of the program.
+ */
+const char *fsm_state_name(state_t state);
+
+/**
+ * Look up the transition for an event occurring in a state. The machine keeps
+ * no state of its own: the caller holds the current state and stores the one
+ * returned. Asserts that state and event are in range and action is not NULL.
+ *
+ * @param state  The current state of the machine.
+ * @param event  The event that occurred.
+ * @param action Where to store the action to take.
+ * @return The next state.
+ */
+state_t fsm_step(state_t state, event_t event, action_t *action);
 
 #endif

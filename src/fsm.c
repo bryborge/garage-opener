@@ -2,7 +2,15 @@
  * @file fsm.c
  * @brief The garage door state machine.
  */
+#include <assert.h>
+#include <stddef.h>
+
 #include "fsm.h"
+
+typedef struct {
+    state_t next;
+    action_t action;
+} transition_t;
 
 static const transition_t table[N_STATES][N_EVENTS] = {
     [CLOSED] = {
@@ -36,3 +44,33 @@ static const transition_t table[N_STATES][N_EVENTS] = {
         [E_TIMER_EXPIRED]           = { OPENING, A_NONE }
     }
 };
+
+static const char *const state_names[] = {
+    [CLOSED]     = "CLOSED",
+    [OPENING]    = "OPENING",
+    [OPEN]       = "OPEN",
+    [CLOSING]    = "CLOSING",
+    [OBSTRUCTED] = "OBSTRUCTED",
+};
+
+_Static_assert(
+    sizeof state_names / sizeof state_names[0] == N_STATES,
+    "state_names is out of step with state_t"
+);
+
+const char *fsm_state_name(state_t state) {
+    assert(state >= 0 && state < N_STATES);
+
+    return state_names[state];
+}
+
+state_t fsm_step(state_t state, event_t event, action_t *action) {
+    assert(state >= 0 && state < N_STATES);
+    assert(event >= 0 && event < N_EVENTS);
+    assert(action != NULL);
+
+    const transition_t t = table[state][event];
+
+    *action = t.action;
+    return t.next;
+}

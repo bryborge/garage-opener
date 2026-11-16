@@ -15,7 +15,7 @@ math_dep = meson.get_compiler('c').find_library('m', required : false)
 
 # Modules
 garage_inc = include_directories('include/garage_opener')
-garage_lib = static_library('garage', 'src/sensor.c',
+garage_lib = static_library('garage', 'src/sensor.c', 'src/fsm.c',
     include_directories : garage_inc,
     dependencies : [iom361_dep, math_dep],
 )

@@ -6,8 +6,9 @@
 #include <time.h>
 
 #include "iom361_r4.h"
-#include "sensor.h"
 #include "unity.h"
+
+#include "sensor.h"
 
 static uint32_t *base;
 
@@ -89,5 +90,6 @@ int main(void) {
     RUN_TEST(test_sensor_read_rounds_at_freeze_threshold);
     RUN_TEST(test_sensor_read_converts_at_100_c);
     RUN_TEST(test_sensor_read_fails_on_wrong_base);
+
     return UNITY_END();
 }

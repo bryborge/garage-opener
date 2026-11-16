@@ -4,7 +4,7 @@ This is the final project for ECE361 - Computer System Organization at Portland 
 
 ## Specification
 
-The project assignment details are captured in the specification document found in [docs/SPEC.md](docs/SPEC.md).
+The project assignment details are captured in the assignment document found in [docs/SPEC.md](docs/ASSIGNMENT.md).
 
 ## Getting Started
 

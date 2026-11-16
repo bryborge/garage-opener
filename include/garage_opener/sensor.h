@@ -16,9 +16,10 @@ typedef struct {
 
 /**
  * Take a sensor reading. Temperature and humidity are read from the registers
- * defined in iom361, simulating a memory-mapped AHT20 device.
+ * defined in iom361, simulating a memory-mapped AHT20 device. These sensor
+ * values are rounded to 0.1. On failure, *out is not written.
  *
- * @param base The address to the full 32-bit register.
+ * @param base The base address of the iom361 register block.
  * @param now  Time of this reading, UTC seconds since the Unix epoch.
  * @param out  Where the record is stored.
  * @return 0 on success, or else the iom361 return code of the register read

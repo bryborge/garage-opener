@@ -11,10 +11,23 @@ project('garage_opener', 'c',
 
 # Third-party libraries
 iom361_dep = dependency('iom361_r4')
+math_dep = meson.get_compiler('c').find_library('m', required : false)
+
+# Modules
+garage_inc = include_directories('include/garage_opener')
+garage_lib = static_library('garage', 'src/sensor.c',
+    include_directories : garage_inc,
+    dependencies : [iom361_dep, math_dep],
+)
+garage_dep = declare_dependency(
+    link_with : garage_lib,
+    include_directories : garage_inc,
+    dependencies : [iom361_dep, math_dep],
+)
 
 # The main program
 executable('garage_opener', 'src/main.c',
-    dependencies : iom361_dep,
+    dependencies : garage_dep,
 )
 
 # Tests

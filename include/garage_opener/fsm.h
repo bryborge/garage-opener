@@ -23,13 +23,13 @@ typedef enum {
     E_REMOTE_PRESSED,           // The remote was pressed, temp > 1.0 C.
     E_REMOTE_PRESSED_FREEZING,  // The remote was pressed, temp <= 1.0 C.
     E_BARRIER_BLOCKED,          // The light barrier is triggered.
-    E_TIMER_EXPIRED,            // The current state's time is up.
+    E_TIMER_EXPIRED,            // The door's travel or its pause is complete.
     N_EVENTS
 } event_t;
 
 /* Actions */
 typedef enum {
-    A_UNDEFINED,                // Empty? (used only in tests)
+    A_UNDEFINED,                // Undefined transition.
     A_NONE,                     // Do nothing.
     A_LOG_REFUSAL,              // Record a refused remote press.
     A_LOG_OBSTRUCTION,          // Record an obstruction.

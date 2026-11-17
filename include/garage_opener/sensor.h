@@ -27,4 +27,15 @@ typedef struct {
  */
 int sensor_read(uint32_t *base, time_t now, reading_t *reading);
 
+/**
+ * Format a timestamp as "YYYY-MM-DD HH:MM:SS" in UTC. On failure, text is not
+ * written.
+ *
+ * @param timestamp UTC seconds since the Unix epoch.
+ * @param text      Where the text is stored.
+ * @return 0 on success, or 1 if the timestamp is outside the range of dates
+ *         that can be formatted.
+ */
+int sensor_format_timestamp(time_t timestamp, char text[20]);
+
 #endif

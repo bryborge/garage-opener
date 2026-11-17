@@ -25,10 +25,10 @@ meson setup build
 meson compile -C build
 ```
 
-The program executable is in `build/garage_opener` and can be run with:
+The program executable is in `build/garage_opener`. It replays a scenario file, for example:
 
 ```sh
-./build/garage_opener
+./build/garage_opener scenarios/normal.txt
 ```
 
 ### Testing

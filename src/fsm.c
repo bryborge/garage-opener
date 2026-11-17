@@ -1,22 +1,35 @@
 /**
  * @file fsm.c
  * @brief The garage door state machine.
+ *
+ * The machine is built in two layers. The transition table maps a state and
+ * an event to the next state and an action, and fsm_step looks it up. On top
+ * of that, fsm_tick turns one tick's inputs into events, feeds them to the
+ * table in a fixed order, and keeps the door's position and pause countdown.
  */
 #include <assert.h>
 #include <stddef.h>
 
 #include "fsm.h"
 
+/* Rule values from the assignment. */
 static const int travel_ticks         = 15;
 static const int pause_ticks          = 2;
 static const float freeze_threshold_c = 1.0f;
+
+/* Transitions -------------------------------------------------------------- */
 
 typedef struct {
     state_t next;
     action_t action;
 } transition_t;
 
-static const transition_t table[N_STATES][N_EVENTS] = {
+/*
+ * The transition table, indexed by state and then by event. Each cell holds
+ * the next state and the action to take. A cell left out of the initializer
+ * is zeroed, which gives it the action A_UNDEFINED.
+ */
+static const transition_t transitions[N_STATES][N_EVENTS] = {
     [CLOSED] = {
         [E_REMOTE_PRESSED]          = { OPENING, A_NONE },
         [E_REMOTE_PRESSED_FREEZING] = { CLOSED, A_LOG_REFUSAL },
@@ -54,11 +67,13 @@ state_t fsm_step(state_t state, event_t event, action_t *action) {
     assert(event >= 0 && event < N_EVENTS);
     assert(action != NULL);
 
-    const transition_t t = table[state][event];
+    const transition_t t = transitions[state][event];
 
     *action = t.action;
     return t.next;
 }
+
+/* Machine ------------------------------------------------------------------ */
 
 fsm_t fsm_init(void) {
     return (fsm_t){
@@ -114,7 +129,11 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report) {
         apply(fsm, E_BARRIER_BLOCKED, report);
     }
 
-    /* 2. Completion check. */
+    /*
+     * 2. Completion check. Skipped if the barrier just changed the state: a
+     * state entered during this tick does not move or count down until the
+     * next one.
+     */
     if (fsm->state == starting_state) {
         bool complete = false;
 
@@ -152,6 +171,8 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report) {
     report->freeze_guard_active = freezing && fsm->state == CLOSED;
 }
 
+/* Outputs ------------------------------------------------------------------ */
+
 static const fsm_outputs_t outputs[] = {
     /*               up     down   red  green  blue */
     [CLOSED]     = { false, false,   0,  255,    0 },  // Green
@@ -161,6 +182,7 @@ static const fsm_outputs_t outputs[] = {
     [OBSTRUCTED] = { false, false, 255,    0,    0 },  // Red
 };
 
+/* Fails the build if a state is added without an entry in outputs. */
 _Static_assert(
     sizeof outputs / sizeof outputs[0] == N_STATES,
     "outputs are out of step with state_t"
@@ -172,6 +194,8 @@ fsm_outputs_t fsm_outputs(state_t state) {
     return outputs[state];
 }
 
+/* State names -------------------------------------------------------------- */
+
 static const char *const state_names[] = {
     [CLOSED]     = "CLOSED",
     [OPENING]    = "OPENING",
@@ -180,9 +204,10 @@ static const char *const state_names[] = {
     [OBSTRUCTED] = "OBSTRUCTED",
 };
 
+/* Fails the build if a state is added without an entry in state_names. */
 _Static_assert(
     sizeof state_names / sizeof state_names[0] == N_STATES,
-    "state_names is out of step with state_t"
+    "state_names are out of step with state_t"
 );
 
 const char *fsm_state_name(state_t state) {

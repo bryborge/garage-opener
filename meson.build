@@ -15,7 +15,7 @@ math_dep = meson.get_compiler('c').find_library('m', required : false)
 
 # Modules
 garage_inc = include_directories('include/garage_opener')
-garage_lib = static_library('garage', 'src/sensor.c',
+garage_lib = static_library('garage', 'src/sensor.c', 'src/fsm.c',
     include_directories : garage_inc,
     dependencies : [iom361_dep, math_dep],
 )
@@ -38,4 +38,8 @@ unity_dep = declare_dependency(
 test_sensor = executable('test_sensor', 'tests/test_sensor.c',
     dependencies : [garage_dep, unity_dep],
 )
+test_fsm = executable('test_fsm', 'tests/test_fsm.c',
+    dependencies : [garage_dep, unity_dep],
+)
 test('sensor', test_sensor)
+test('fsm', test_fsm)

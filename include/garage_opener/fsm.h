@@ -5,6 +5,8 @@
 #ifndef FSM_H
 #define FSM_H
 
+#include <stdbool.h>
+
 /* States */
 typedef enum {
     CLOSED,                     // The door is closed (Initial state).
@@ -33,13 +35,53 @@ typedef enum {
     N_ACTIONS
 } action_t;
 
+typedef struct {
+    bool remote_on;
+    bool barrier_blocked;
+    float temp_c;
+} fsm_inputs_t;
+
+typedef struct {
+    state_t state;
+    bool remote_was_on;
+    int position;
+    int pause_ticks_left;
+} fsm_t;
+
+typedef struct {
+    bool remote_pressed;
+    bool press_refused;
+    bool obstruction_detected;
+    bool freeze_guard_active;
+} fsm_report_t;
+
 /**
- * Get the name of a state. Asserts that state is in range.
+ * Initialize a machine in its starting condition. The garage door is closed,
+ * and the remote is off before the first tick.
  *
- * @param state The state to name.
- * @return A string that is valid for the life of the program.
+ * @return The machine, for the caller to keep and pass to fsm_tick.
  */
-const char *fsm_state_name(state_t state);
+fsm_t fsm_init(void);
+
+/**
+ * Run the machine for one tick. Events are derived from the inputs and
+ * applied in a fixed order:
+ *
+ *   1. Barrier: the light barrier is blocked.
+ *   2. Completion: an opening or closing door moves one step, and an
+ *      obstructed door counts down its pause. Reaching the end of travel or
+ *      of the pause completes the state.
+ *   3. Press: the remote went from off to on since the previous tick.
+ *
+ * A state entered during a tick does not move or count down until the next
+ * tick. Asserts that no argument is NULL.
+ *
+ * @param fsm    The machine to advance.
+ * @param inputs What the machine sees on this tick.
+ * @param report Where to store what happened on this tick. Every field is
+ *               written.
+ */
+void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report);
 
 /**
  * Look up the transition for an event occurring in a state. The machine keeps
@@ -52,5 +94,13 @@ const char *fsm_state_name(state_t state);
  * @return The next state.
  */
 state_t fsm_step(state_t state, event_t event, action_t *action);
+
+/**
+ * Get the name of a state. Asserts that state is in range.
+ *
+ * @param state The state to name.
+ * @return A string that is valid for the life of the program.
+ */
+const char *fsm_state_name(state_t state);
 
 #endif

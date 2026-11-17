@@ -77,7 +77,7 @@ static void test_fsm_step_normal_operation(void) {
 }
 
 /**
- * Rule: A blocked light barrier stops a closing door and logs the
+ * A blocked light barrier stops a closing door and logs the
  * obstruction. When the pause is over, the door opens again. No logged event.
  *
  * CLOSING -> OBSTRUCTED -> OPENING.
@@ -96,7 +96,7 @@ static void test_fsm_step_obstruction_while_closing(void) {
 }
 
 /**
- * Rule: A remote press at or below 1.0 C is refused while the door is
+ * A remote press at or below 1.0 C is refused while the door is
  * closed. The door stays closed and the refusal is logged.
  *
  * CLOSED -> CLOSED.
@@ -111,7 +111,7 @@ static void test_fsm_step_freezing_press_refused_when_closed(void) {
 }
 
 /**
- * Rule: A remote press reverses a door that is in motion.
+ * A remote press reverses a door that is in motion.
  *
  * OPENING -> CLOSING, and CLOSING -> OPENING.
  */
@@ -129,7 +129,7 @@ static void test_fsm_step_press_reverses_moving_door(void) {
 }
 
 /**
- * Rule: The freeze guard applies only to a closed door. In any other
+ * The freeze guard applies only to a closed door. In any other
  * state a press at or below 1.0 C acts like a press above it, and no refusal
  * is logged.
  *
@@ -153,7 +153,7 @@ static void test_fsm_step_freezing_press_allowed_when_not_closed(void) {
 }
 
 /**
- * Rule: A blocked light barrier is ignored unless the door is closing.
+ * A blocked light barrier is ignored unless the door is closing.
  * The state does not change and no obstruction is logged.
  */
 static void test_fsm_step_barrier_ignored_when_not_closing(void) {
@@ -178,7 +178,7 @@ static void test_fsm_step_barrier_ignored_when_not_closing(void) {
 }
 
 /**
- * Rule: A remote press is ignored while the door is obstructed, regardless of
+ * A remote press is ignored while the door is obstructed, regardless of
  * temperature, and is not logged as a refusal.
  */
 static void test_fsm_step_press_ignored_when_obstructed(void) {
@@ -195,7 +195,7 @@ static void test_fsm_step_press_ignored_when_obstructed(void) {
 }
 
 /**
- * Rule: A remote press opens the closed garage door in 15 ticks. The door is
+ * A remote press opens the closed garage door in 15 ticks. The door is
  * OPENING on the tick of the press and the 14 ticks after it, and OPEN on
  * the tick after those.
  */
@@ -220,7 +220,7 @@ static void test_fsm_tick_press_opens_door_in_15_ticks(void) {
 }
 
 /**
- * Rule: A remote press closes an open garage door in 15 ticks. The door is
+ * A remote press closes an open garage door in 15 ticks. The door is
  * CLOSING on the tick of the press and the 14 ticks after it, and CLOSED on
  * the tick after those.
  */
@@ -244,7 +244,7 @@ static void test_fsm_tick_press_closes_door_in_15_ticks(void) {
 }
 
 /**
- * Rule: Holding the remote on counts as a single press. A second press
+ * Holding the remote on counts as a single press. A second press
  * requires the remote to be released and turned on again.
  */
 static void test_fsm_tick_held_remote_is_one_press(void) {
@@ -271,7 +271,7 @@ static void test_fsm_tick_held_remote_is_one_press(void) {
 }
 
 /**
- * Rule: When the garage door reverses its travel, it goes back only as far as
+ * When the garage door reverses its travel, it goes back only as far as
  * it has already gone.
  *
  * The door still moves one step on the tick of the press, and then reverses.
@@ -299,7 +299,7 @@ static void test_fsm_tick_reversal_takes_distance_travelled(void) {
 }
 
 /**
- * Rule: The light barrier stops a closing garage door for 2 ticks when it
+ * The light barrier stops a closing garage door for 2 ticks when it
  * detects an object in the door's path, then the door begins to open again,
  * and the obstruction is reported.
  */
@@ -333,7 +333,7 @@ static void test_fsm_tick_obstruction_pauses_then_reopens(void) {
 }
 
 /**
- * Rule: The light barrier is checked before completion is checked. The garage
+ * The light barrier is checked before completion is checked. The garage
  * door stops instead of moving on the tick it would have finished closing.
  */
 static void test_fsm_tick_barrier_precedes_completion(void) {
@@ -348,7 +348,7 @@ static void test_fsm_tick_barrier_precedes_completion(void) {
 }
 
 /**
- * Rule: A remote press at exactly 1.0 C is refused while the door is closed,
+ * A remote press at exactly 1.0 C is refused while the door is closed,
  * and is reported as both a press and a refusal. At 1.1 C it opens the door.
  */
 static void test_fsm_tick_freezing_press_refused_when_closed(void) {
@@ -370,7 +370,7 @@ static void test_fsm_tick_freezing_press_refused_when_closed(void) {
 }
 
 /**
- * Rule: The freeze guard is active when:
+ * The freeze guard is active when:
  *
  *      1) the garage door is closed, and
  *      2) it is at or below 1.0 C.
@@ -401,7 +401,7 @@ static void test_fsm_tick_freeze_guard_active_when_closed_and_cold(void) {
 }
 
 /**
- * Rule: The up motor runs only while the door is opening, and the down motor
+ * The up motor runs only while the door is opening, and the down motor
  * only while it is closing. In every other state, both motors are off.
  */
 static void test_fsm_outputs_motor_runs_only_while_door_moves(void) {
@@ -415,7 +415,7 @@ static void test_fsm_outputs_motor_runs_only_while_door_moves(void) {
 }
 
 /**
- * Rule: Each state has its own color, so no two states look the same.
+ * Each state has its own color, so no two states look the same.
  */
 static void test_fsm_outputs_color_is_distinct_per_state(void) {
     for (int a = 0; a < N_STATES; a++) {

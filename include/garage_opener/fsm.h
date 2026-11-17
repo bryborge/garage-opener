@@ -6,6 +6,7 @@
 #define FSM_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 /* States */
 typedef enum {
@@ -40,6 +41,14 @@ typedef struct {
     bool barrier_blocked;
     float temp_c;
 } fsm_inputs_t;
+
+typedef struct {
+    bool motor_up;
+    bool motor_down;
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+} fsm_outputs_t;
 
 typedef struct {
     state_t state;
@@ -94,6 +103,16 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report);
  * @return The next state.
  */
 state_t fsm_step(state_t state, event_t event, action_t *action);
+
+/**
+ * Look up the outputs for a state: which motor runs, and the color of the
+ * status light as red, green, and blue levels (0 to 255). The outputs hold
+ * for as long as the machine is in the state. Asserts that state is in range.
+ *
+ * @param state The state to look up.
+ * @return The outputs for the state.
+ */
+fsm_outputs_t fsm_outputs(state_t state);
 
 /**
  * Get the name of a state. Asserts that state is in range.

@@ -400,6 +400,39 @@ static void test_fsm_tick_freeze_guard_active_when_closed_and_cold(void) {
     TEST_ASSERT_TRUE(report.freeze_guard_active);
 }
 
+/**
+ * Rule: The up motor runs only while the door is opening, and the down motor
+ * only while it is closing. In every other state, both motors are off.
+ */
+static void test_fsm_outputs_motor_runs_only_while_door_moves(void) {
+    for (int s = 0; s < N_STATES; s++) {
+        const fsm_outputs_t outputs = fsm_outputs((state_t)s);
+        const char *name = fsm_state_name((state_t)s);
+
+        TEST_ASSERT_EQUAL_MESSAGE(s == OPENING, outputs.motor_up, name);
+        TEST_ASSERT_EQUAL_MESSAGE(s == CLOSING, outputs.motor_down, name);
+    }
+}
+
+/**
+ * Rule: Each state has its own color, so no two states look the same.
+ */
+static void test_fsm_outputs_color_is_distinct_per_state(void) {
+    for (int a = 0; a < N_STATES; a++) {
+        for (int b = a + 1; b < N_STATES; b++) {
+            const fsm_outputs_t x = fsm_outputs((state_t)a);
+            const fsm_outputs_t y = fsm_outputs((state_t)b);
+            const bool same_color =
+                x.red == y.red && x.green == y.green && x.blue == y.blue;
+
+            char pair[48];
+            snprintf(pair, sizeof pair, "%s and %s",
+                fsm_state_name((state_t)a), fsm_state_name((state_t)b));
+            TEST_ASSERT_FALSE_MESSAGE(same_color, pair);
+        }
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_fsm_init_starts_closed_and_at_rest);
@@ -419,6 +452,8 @@ int main(void) {
     RUN_TEST(test_fsm_tick_barrier_precedes_completion);
     RUN_TEST(test_fsm_tick_freezing_press_refused_when_closed);
     RUN_TEST(test_fsm_tick_freeze_guard_active_when_closed_and_cold);
+    RUN_TEST(test_fsm_outputs_motor_runs_only_while_door_moves);
+    RUN_TEST(test_fsm_outputs_color_is_distinct_per_state);
 
     return UNITY_END();
 }

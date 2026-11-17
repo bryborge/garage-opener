@@ -152,6 +152,26 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report) {
     report->freeze_guard_active = freezing && fsm->state == CLOSED;
 }
 
+static const fsm_outputs_t outputs[] = {
+    /*               up     down   red  green  blue */
+    [CLOSED]     = { false, false,   0,  255,    0 },  // Green
+    [OPENING]    = { true,  false, 255,  255,    0 },  // Yellow
+    [OPEN]       = { false, false,   0,    0,  255 },  // Blue
+    [CLOSING]    = { false, true,  255,    0,  255 },  // Magenta
+    [OBSTRUCTED] = { false, false, 255,    0,    0 },  // Red
+};
+
+_Static_assert(
+    sizeof outputs / sizeof outputs[0] == N_STATES,
+    "outputs are out of step with state_t"
+);
+
+fsm_outputs_t fsm_outputs(state_t state) {
+    assert(state >= 0 && state < N_STATES);
+
+    return outputs[state];
+}
+
 static const char *const state_names[] = {
     [CLOSED]     = "CLOSED",
     [OPENING]    = "OPENING",

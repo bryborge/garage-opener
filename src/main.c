@@ -2,17 +2,19 @@
  * @file main.c
  * @brief The garage door opener entrypoint.
  */
+#include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
-#include <stddef.h>
+#include <limits.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "iom361_r4.h"
 
 #include "fsm.h"
 #include "sensor.h"
-
-#define START_TIME ((time_t) 1791273600)  // 2026-10-06 08:00:00 UTC
-#define N_TICKS    30
 
 /* Switch register bits. */
 #define SW_REMOTE        (1u << 0)
@@ -22,6 +24,17 @@
 #define LED_MOTOR_UP     (1u << 0)
 #define LED_MOTOR_DOWN   (1u << 1)
 
+/* Scenario file ------------------------------------------------------------ */
+
+#define LINE_SIZE 256
+
+/* A scenario file that is being read. */
+typedef struct {
+    const char *path;
+    FILE *file;
+    int line_number;
+} scenario_t;
+
 /* A change to the world. From its tick on, the values hold until the next. */
 typedef struct {
     int tick;
@@ -30,18 +43,247 @@ typedef struct {
     uint32_t switches;
 } world_t;
 
-/* Placeholder for a scenario file: open, start closing, block the barrier. */
-static const world_t script[] = {
-    {  0, 15.0f, 60.0f, 0x0 },
-    {  2, 15.0f, 60.0f, 0x1 },  // REMOTE pressed
-    {  3, 15.0f, 60.0f, 0x0 },  // and released
-    { 19, 15.0f, 60.0f, 0x1 },  // REMOTE pressed
-    { 20, 15.0f, 60.0f, 0x0 },  // and released
-    { 23, 15.0f, 60.0f, 0x2 },  // LIGHT_BARRIER blocked
-    { 24, 15.0f, 60.0f, 0x0 },  // and cleared
-};
+/**
+ * Report a problem with the line of the scenario that was read last.
+ */
+static void scenario_error(const scenario_t *scenario, const char *message) {
+    fprintf(stderr, "%s:%d: %s\n",
+        scenario->path, scenario->line_number, message);
+}
 
-int main(void) {
+/**
+ * Check that only whitespace is left in a string.
+ */
+static bool is_blank(const char *text) {
+    while (isspace((unsigned char)*text)) text++;
+
+    return *text == '\0';
+}
+
+/**
+ * Read the next line of a scenario that holds content. A comment runs from
+ * '#' to the end of its line and is removed. Lines left blank are skipped.
+ *
+ * @return 1 if a line was read, 0 at the end of the file, or -1 after
+ *         reporting an error.
+ */
+static int scenario_read_line(scenario_t *scenario, char line[LINE_SIZE]) {
+    while (fgets(line, LINE_SIZE, scenario->file) != NULL) {
+        scenario->line_number++;
+
+        if (strchr(line, '\n') == NULL && !feof(scenario->file)) {
+            scenario_error(scenario, "the line is too long");
+            return -1;
+        }
+
+        char *comment = strchr(line, '#');
+        if (comment != NULL) *comment = '\0';
+
+        if (!is_blank(line)) return 1;
+    }
+
+    if (ferror(scenario->file)) {
+        scenario_error(scenario, "the file could not be read");
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * Read the start line of a scenario: the word "start" and a Unix timestamp.
+ *
+ * @return true on success, or false after reporting an error.
+ */
+static bool scenario_read_start(scenario_t *scenario, time_t *start) {
+    char line[LINE_SIZE];
+    if (scenario_read_line(scenario, line) != 1) {
+        if (!ferror(scenario->file)) {
+            scenario_error(scenario, "expected \"start\" and a timestamp");
+        }
+        return false;
+    }
+
+    const char *text = line;
+    while (isspace((unsigned char)*text)) text++;
+
+    char *end;
+    errno = 0;
+    const long long seconds =
+        strncmp(text, "start", 5) == 0 && isspace((unsigned char)text[5])
+            ? strtoll(text + 5, &end, 10)
+            : -1;
+
+    if (seconds < 0 || errno != 0 || end == text + 5 || !is_blank(end)) {
+        scenario_error(scenario, "expected \"start\" and a timestamp");
+        return false;
+    }
+
+    *start = (time_t)seconds;
+    return true;
+}
+
+/**
+ * Read the next change of a scenario: a tick, a temperature, a humidity, and
+ * the switch register in hexadecimal.
+ *
+ * @return 1 if a change was read, 0 at the end of the file, or -1 after
+ *         reporting an error.
+ */
+static int scenario_read_change(scenario_t *scenario, world_t *change) {
+    char line[LINE_SIZE];
+    const int rc = scenario_read_line(scenario, line);
+    if (rc != 1) return rc;
+
+    char *end;
+    errno = 0;
+
+    const long tick = strtol(line, &end, 10);
+    bool valid = end != line && tick >= 0 && tick <= INT_MAX;
+
+    const char *text = end;
+    const float temp_c = strtof(text, &end);
+    valid = valid && end != text && isfinite(temp_c);
+
+    text = end;
+    const float rh_pct = strtof(text, &end);
+    valid = valid && end != text && isfinite(rh_pct);
+
+    text = end;
+    const unsigned long switches = strtoul(text, &end, 16);
+    valid = valid && end != text && switches <= UINT32_MAX;
+
+    if (!valid || errno != 0 || !is_blank(end)) {
+        scenario_error(scenario,
+            "expected a tick, a temperature, a humidity, and the switches");
+        return -1;
+    }
+
+    *change = (world_t){
+        .tick     = (int)tick,
+        .temp_c   = temp_c,
+        .rh_pct   = rh_pct,
+        .switches = (uint32_t)switches,
+    };
+    return 1;
+}
+
+/* Replay ------------------------------------------------------------------- */
+
+/**
+ * Run the device for one tick: read the inputs, run the state machine, write
+ * the outputs, and print a trace line.
+ *
+ * @return 0 on success, or 1 after reporting an error.
+ */
+static int run_tick(uint32_t *base, fsm_t *fsm, time_t now) {
+    /* Read the inputs. */
+    reading_t reading;
+    int rc = sensor_read(base, now, &reading);
+    if (rc != 0) {
+        fprintf(stderr, "sensor_read failed: %d\n", rc);
+        return 1;
+    }
+
+    const uint32_t switches = iom361_readReg(base, SWITCHES_REG, &rc);
+    if (rc != 0) {
+        fprintf(stderr, "reading the switches failed: %d\n", rc);
+        return 1;
+    }
+
+    /* Run the state machine. */
+    const fsm_inputs_t inputs = {
+        .remote_on       = (switches & SW_REMOTE) != 0,
+        .barrier_blocked = (switches & SW_LIGHT_BARRIER) != 0,
+        .temp_c          = reading.temp_c,
+    };
+    fsm_report_t report;
+    fsm_tick(fsm, &inputs, &report);
+
+    /* Write the outputs. */
+    const fsm_outputs_t outputs = fsm_outputs(fsm->state);
+    const uint32_t leds = (outputs.motor_up ? LED_MOTOR_UP : 0u)
+                        | (outputs.motor_down ? LED_MOTOR_DOWN : 0u);
+
+    iom361_writeReg(base, LEDS_REG, leds, &rc);
+    if (rc != 0) {
+        fprintf(stderr, "writing the LEDs failed: %d\n", rc);
+        return 1;
+    }
+
+    iom361_writeReg(base, RGB_LED_REG,
+        build_rgb_reg(1, outputs.red, outputs.green, outputs.blue), &rc);
+    if (rc != 0) {
+        fprintf(stderr, "writing the RGB LED failed: %d\n", rc);
+        return 1;
+    }
+
+    /* Summarize the tick. */
+    const uint32_t status = fsm_status_pack((fsm_status_t){
+        .state               = fsm->state,
+        .motor_up            = outputs.motor_up,
+        .motor_down          = outputs.motor_down,
+        .freeze_guard_active = report.freeze_guard_active,
+    });
+
+    char timestamp[20];
+    rc = sensor_format_timestamp(reading.timestamp, timestamp);
+    if (rc != 0) {
+        fprintf(stderr, "formatting the timestamp failed: %d\n", rc);
+        return 1;
+    }
+
+    printf("%s state=%s temp=%.1f rh=%.1f leds=0x%" PRIX32
+        " status=0x%08" PRIX32 "\n",
+        timestamp, fsm_state_name(fsm->state), reading.temp_c,
+        reading.rh_pct, leds, status);
+
+    return 0;
+}
+
+/**
+ * Replay a scenario from its start line to the tick of its last change.
+ *
+ * @return 0 on success, or 1 after reporting an error.
+ */
+static int replay(scenario_t *scenario, uint32_t *base) {
+    time_t start;
+    if (!scenario_read_start(scenario, &start)) return 1;
+
+    world_t next;
+    int more = scenario_read_change(scenario, &next);
+    fsm_t fsm = fsm_init();
+
+    for (int tick = 0; more == 1; tick++) {
+        /* Play the world. */
+        if (next.tick == tick) {
+            _iom361_set_sensor1(next.temp_c, next.rh_pct);
+            _iom361_set_switches(next.switches);
+
+            more = scenario_read_change(scenario, &next);
+            if (more == -1) return 1;
+
+            if (more == 1 && next.tick <= tick) {
+                scenario_error(scenario, "the tick must be after the last");
+                return 1;
+            }
+        }
+
+        if (run_tick(base, &fsm, start + tick) != 0) return 1;
+    }
+
+    return more == 0 ? 0 : 1;
+}
+
+/**
+ * Program entry point.
+ */
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "usage: %s SCENARIO\n", argv[0]);
+        return 1;
+    }
+
     int rc;
     uint32_t *base = iom361_initialize(2, 2, &rc);
 
@@ -53,80 +295,14 @@ int main(void) {
     /* Keep the model's LED display out of the trace. */
     iom361_set_display(false);
 
-    const size_t n_changes = sizeof script / sizeof script[0];
-    size_t next_change = 0;
-    fsm_t fsm = fsm_init();
-
-    for (int tick = 0; tick < N_TICKS; tick++) {
-        /* Play the world. */
-        if (next_change < n_changes && script[next_change].tick == tick) {
-            const world_t *world = &script[next_change++];
-
-            _iom361_set_sensor1(world->temp_c, world->rh_pct);
-            _iom361_set_switches(world->switches);
-        }
-
-        /* Read the inputs. */
-        reading_t reading;
-        rc = sensor_read(base, START_TIME + tick, &reading);
-        if (rc != 0) {
-            fprintf(stderr, "sensor_read failed: %d\n", rc);
-            return 1;
-        }
-
-        const uint32_t switches = iom361_readReg(base, SWITCHES_REG, &rc);
-        if (rc != 0) {
-            fprintf(stderr, "reading the switches failed: %d\n", rc);
-            return 1;
-        }
-
-        /* Run the state machine. */
-        const fsm_inputs_t inputs = {
-            .remote_on       = (switches & SW_REMOTE) != 0,
-            .barrier_blocked = (switches & SW_LIGHT_BARRIER) != 0,
-            .temp_c          = reading.temp_c,
-        };
-        fsm_report_t report;
-        fsm_tick(&fsm, &inputs, &report);
-
-        /* Write the outputs. */
-        const fsm_outputs_t outputs = fsm_outputs(fsm.state);
-        const uint32_t leds = (outputs.motor_up ? LED_MOTOR_UP : 0u)
-                            | (outputs.motor_down ? LED_MOTOR_DOWN : 0u);
-
-        iom361_writeReg(base, LEDS_REG, leds, &rc);
-        if (rc != 0) {
-            fprintf(stderr, "writing the LEDs failed: %d\n", rc);
-            return 1;
-        }
-
-        iom361_writeReg(base, RGB_LED_REG,
-            build_rgb_reg(1, outputs.red, outputs.green, outputs.blue), &rc);
-        if (rc != 0) {
-            fprintf(stderr, "writing the RGB LED failed: %d\n", rc);
-            return 1;
-        }
-
-        /* Summarize the tick. */
-        const uint32_t status = fsm_status_pack((fsm_status_t){
-            .state               = fsm.state,
-            .motor_up            = outputs.motor_up,
-            .motor_down          = outputs.motor_down,
-            .freeze_guard_active = report.freeze_guard_active,
-        });
-
-        char timestamp[20];
-        rc = sensor_format_timestamp(reading.timestamp, timestamp);
-        if (rc != 0) {
-            fprintf(stderr, "formatting the timestamp failed: %d\n", rc);
-            return 1;
-        }
-
-        printf("%s state=%s temp=%.1f rh=%.1f leds=0x%" PRIX32
-            " status=0x%08" PRIX32 "\n",
-            timestamp, fsm_state_name(fsm.state), reading.temp_c,
-            reading.rh_pct, leds, status);
+    scenario_t scenario = {.path = argv[1], .file = fopen(argv[1], "r")};
+    if (scenario.file == NULL) {
+        fprintf(stderr, "%s: %s\n", scenario.path, strerror(errno));
+        return 1;
     }
 
-    return 0;
+    rc = replay(&scenario, base);
+    fclose(scenario.file);
+
+    return rc;
 }

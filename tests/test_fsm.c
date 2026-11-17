@@ -433,6 +433,65 @@ static void test_fsm_outputs_color_is_distinct_per_state(void) {
     }
 }
 
+/**
+ * Packing a status word and unpacking it again gives back every field,
+ * for every state and every combination of the three flags.
+ */
+static void test_fsm_status_unpack_returns_packed_fields(void) {
+    for (int s = 0; s < N_STATES; s++) {
+        for (int flags = 0; flags < 8; flags++) {
+            const fsm_status_t packed = {
+                .state               = (state_t)s,
+                .motor_up            = (flags & 1) != 0,
+                .motor_down          = (flags & 2) != 0,
+                .freeze_guard_active = (flags & 4) != 0,
+            };
+            const fsm_status_t unpacked =
+                fsm_status_unpack(fsm_status_pack(packed));
+
+            TEST_ASSERT_STATE(packed.state, unpacked.state);
+            TEST_ASSERT_EQUAL(packed.motor_up, unpacked.motor_up);
+            TEST_ASSERT_EQUAL(packed.motor_down, unpacked.motor_down);
+            TEST_ASSERT_EQUAL(
+                packed.freeze_guard_active, unpacked.freeze_guard_active);
+        }
+    }
+}
+
+/**
+ * Every bit of a status word outside its four fields is 0. The fields
+ * are bits 0 to 2 and bits 4 to 6, so the used bits are 0x77.
+ */
+static void test_fsm_status_unused_bits_are_zero(void) {
+    const uint32_t unused_bits = ~UINT32_C(0x77);
+
+    for (int s = 0; s < N_STATES; s++) {
+        const fsm_status_t all_flags_on = {
+            .state               = (state_t)s,
+            .motor_up            = true,
+            .motor_down          = true,
+            .freeze_guard_active = true,
+        };
+
+        TEST_ASSERT_BITS_LOW(unused_bits, fsm_status_pack(all_flags_on));
+    }
+}
+
+/**
+ * Each field has a fixed place in the status word. The state is the
+ * low hex digit, and the next digit holds the up motor (bit 4), the down
+ * motor (bit 5), and the freeze guard (bit 6).
+ */
+static void test_fsm_status_pack_places_each_field(void) {
+    const fsm_status_t opening = {.state = OPENING, .motor_up = true};
+    const fsm_status_t closing = {.state = CLOSING, .motor_down = true};
+    const fsm_status_t guarded = {.state = CLOSED, .freeze_guard_active = true};
+
+    TEST_ASSERT_EQUAL_HEX32(0x00000011, fsm_status_pack(opening));
+    TEST_ASSERT_EQUAL_HEX32(0x00000023, fsm_status_pack(closing));
+    TEST_ASSERT_EQUAL_HEX32(0x00000040, fsm_status_pack(guarded));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_fsm_init_starts_closed_and_at_rest);
@@ -454,6 +513,9 @@ int main(void) {
     RUN_TEST(test_fsm_tick_freeze_guard_active_when_closed_and_cold);
     RUN_TEST(test_fsm_outputs_motor_runs_only_while_door_moves);
     RUN_TEST(test_fsm_outputs_color_is_distinct_per_state);
+    RUN_TEST(test_fsm_status_unpack_returns_packed_fields);
+    RUN_TEST(test_fsm_status_unused_bits_are_zero);
+    RUN_TEST(test_fsm_status_pack_places_each_field);
 
     return UNITY_END();
 }

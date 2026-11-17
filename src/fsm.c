@@ -194,6 +194,68 @@ fsm_outputs_t fsm_outputs(state_t state) {
     return outputs[state];
 }
 
+/* Status word -------------------------------------------------------------- */
+
+/* The layout: the lowest bit of each field, and the state's width. */
+static const unsigned status_state_lsb        = 0;
+static const unsigned status_state_width      = 3;
+static const unsigned status_motor_up_lsb     = 4;
+static const unsigned status_motor_down_lsb   = 5;
+static const unsigned status_freeze_guard_lsb = 6;
+
+/**
+ * Get the field of a word that is width bits wide and starts at bit lsb.
+ */
+static uint32_t get_field(uint32_t word, unsigned lsb, unsigned width) {
+    assert(width > 0 && width < 32 && lsb + width <= 32);
+
+    const uint32_t mask = (UINT32_C(1) << width) - 1;
+
+    return (word >> lsb) & mask;
+}
+
+/**
+ * Get a copy of a word with one field replaced by value. The field is width
+ * bits wide and starts at bit lsb. Bits of value that do not fit are dropped.
+ */
+static uint32_t set_field(
+    uint32_t word, unsigned lsb, unsigned width, uint32_t value
+) {
+    assert(width > 0 && width < 32 && lsb + width <= 32);
+
+    const uint32_t mask = ((UINT32_C(1) << width) - 1) << lsb;
+
+    return (word & ~mask) | ((value << lsb) & mask);
+}
+
+uint32_t fsm_status_pack(fsm_status_t status) {
+    assert(status.state >= 0 && status.state < N_STATES);
+
+    uint32_t word = 0;
+
+    word = set_field(word, status_state_lsb, status_state_width, status.state);
+    word = set_field(word, status_motor_up_lsb, 1, status.motor_up);
+    word = set_field(word, status_motor_down_lsb, 1, status.motor_down);
+    word = set_field(word, status_freeze_guard_lsb, 1,
+        status.freeze_guard_active);
+
+    return word;
+}
+
+fsm_status_t fsm_status_unpack(uint32_t word) {
+    const uint32_t state =
+        get_field(word, status_state_lsb, status_state_width);
+
+    assert(state < N_STATES);
+
+    return (fsm_status_t){
+        .state               = (state_t)state,
+        .motor_up            = get_field(word, status_motor_up_lsb, 1),
+        .motor_down          = get_field(word, status_motor_down_lsb, 1),
+        .freeze_guard_active = get_field(word, status_freeze_guard_lsb, 1),
+    };
+}
+
 /* State names -------------------------------------------------------------- */
 
 static const char *const state_names[] = {

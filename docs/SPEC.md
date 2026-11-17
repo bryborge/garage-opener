@@ -142,3 +142,15 @@ Bit 3 is left unused intentionally. It puts the state in the low hex digit and t
 | `0x00000011` | `OPENING`, with `MOTOR_UP` on |
 | `0x00000023` | `CLOSING`, with `MOTOR_DOWN` on |
 | `0x00000040` | `CLOSED`, with the freeze guard active |
+
+## The year 2038
+
+A signed 32-bit `time_t` can count up to 2,147,483,647 seconds after the Unix epoch, which is 2038-01-19 03:14:07 UTC. The next tick does not fit. Signed overflow is undefined in C, but in practice the value wraps around to the most negative number, which is 1901-12-13 20:45:52 UTC.
+
+For this device, that means the timestamps would be wrong and everything else would carry on:
+
+- The trace would jump from 2038-01-19 03:14:07 back to 1901-12-13 20:45:52 and keep counting from there.
+- Every reading stored after that would carry a date in 1901, so the records would no longer be in time order.
+- The garage door itself would behave normally. The state machine counts ticks (the door position and the pause) and never looks at the timestamp, so opening, closing, and the obstruction pause would take as long as they always do.
+
+On the computer this was built on, `time_t` is 64 bits, so the problem does not occur.

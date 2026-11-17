@@ -84,12 +84,75 @@ static void test_sensor_read_fails_on_wrong_base(void) {
     TEST_ASSERT_EQUAL_FLOAT(-1.0f, reading.rh_pct);
 }
 
+/**
+ * sensor_format_timestamp() prints the start time as given.
+ */
+static void test_sensor_format_timestamp_start_time(void) {
+    const time_t start = 1791273600;  // 2026-10-06 08:00:00 UTC
+
+    char text[20];
+    int rc = sensor_format_timestamp(start, text);
+
+    TEST_ASSERT_EQUAL_INT(0, rc);
+    TEST_ASSERT_EQUAL_STRING("2026-10-06 08:00:00", text);
+}
+
+/**
+ * sensor_format_timestamp() counts seconds: 59 seconds after the start time
+ * is still within the same minute.
+ */
+static void test_sensor_format_timestamp_59_seconds_later(void) {
+    const time_t start = 1791273600;  // 2026-10-06 08:00:00 UTC
+
+    char text[20];
+    int rc = sensor_format_timestamp(start + 59, text);
+
+    TEST_ASSERT_EQUAL_INT(0, rc);
+    TEST_ASSERT_EQUAL_STRING("2026-10-06 08:00:59", text);
+}
+
+/**
+ * sensor_format_timestamp() changes the date at midnight: one second after
+ * 23:59:59 is 00:00:00 on the next day.
+ */
+static void test_sensor_format_timestamp_rolls_over_at_midnight(void) {
+    const time_t last_second = 1791331199;  // 2026-10-06 23:59:59 UTC
+
+    char text[20];
+
+    TEST_ASSERT_EQUAL_INT(0, sensor_format_timestamp(last_second, text));
+    TEST_ASSERT_EQUAL_STRING("2026-10-06 23:59:59", text);
+
+    TEST_ASSERT_EQUAL_INT(0, sensor_format_timestamp(last_second + 1, text));
+    TEST_ASSERT_EQUAL_STRING("2026-10-07 00:00:00", text);
+}
+
+/**
+ * sensor_format_timestamp() knows that 2027 is not a leap year: one second
+ * after the end of 28 February is 1 March.
+ */
+static void test_sensor_format_timestamp_rolls_over_to_march(void) {
+    const time_t last_second = 1803859199;  // 2027-02-28 23:59:59 UTC
+
+    char text[20];
+
+    TEST_ASSERT_EQUAL_INT(0, sensor_format_timestamp(last_second, text));
+    TEST_ASSERT_EQUAL_STRING("2027-02-28 23:59:59", text);
+
+    TEST_ASSERT_EQUAL_INT(0, sensor_format_timestamp(last_second + 1, text));
+    TEST_ASSERT_EQUAL_STRING("2027-03-01 00:00:00", text);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_sensor_read_fills_reading_at_0_c);
     RUN_TEST(test_sensor_read_rounds_at_freeze_threshold);
     RUN_TEST(test_sensor_read_converts_at_100_c);
     RUN_TEST(test_sensor_read_fails_on_wrong_base);
+    RUN_TEST(test_sensor_format_timestamp_start_time);
+    RUN_TEST(test_sensor_format_timestamp_59_seconds_later);
+    RUN_TEST(test_sensor_format_timestamp_rolls_over_at_midnight);
+    RUN_TEST(test_sensor_format_timestamp_rolls_over_to_march);
 
     return UNITY_END();
 }

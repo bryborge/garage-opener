@@ -115,10 +115,17 @@ int main(void) {
             .freeze_guard_active = report.freeze_guard_active,
         });
 
-        printf("tick=%-2d state=%-10s temp=%.1f rh=%.1f leds=0x%" PRIX32
+        char timestamp[20];
+        rc = sensor_format_timestamp(reading.timestamp, timestamp);
+        if (rc != 0) {
+            fprintf(stderr, "formatting the timestamp failed: %d\n", rc);
+            return 1;
+        }
+
+        printf("%s state=%s temp=%.1f rh=%.1f leds=0x%" PRIX32
             " status=0x%08" PRIX32 "\n",
-            tick, fsm_state_name(fsm.state), reading.temp_c, reading.rh_pct,
-            leds, status);
+            timestamp, fsm_state_name(fsm.state), reading.temp_c,
+            reading.rh_pct, leds, status);
     }
 
     return 0;

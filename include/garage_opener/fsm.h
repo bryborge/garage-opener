@@ -64,6 +64,25 @@ typedef struct {
     bool freeze_guard_active;
 } fsm_report_t;
 
+/*
+ * The fields of the status word: one 32-bit word that summarizes the machine.
+ * Each hex digit holds one kind of information, so the word can be read at a
+ * glance:
+ *
+ *   Bits 0 to 2   The state.
+ *   Bit  4        The up motor is on.
+ *   Bit  5        The down motor is on.
+ *   Bit  6        The freeze guard is active.
+ *
+ * Every other bit is 0.
+ */
+typedef struct {
+    state_t state;
+    bool motor_up;
+    bool motor_down;
+    bool freeze_guard_active;
+} fsm_status_t;
+
 /**
  * Initialize a machine in its starting condition. The garage door is closed,
  * and the remote is off before the first tick.
@@ -113,6 +132,23 @@ state_t fsm_step(state_t state, event_t event, action_t *action);
  * @return The outputs for the state.
  */
 fsm_outputs_t fsm_outputs(state_t state);
+
+/**
+ * Pack the fields into a status word. Asserts that the state is in range.
+ *
+ * @param status The fields to pack.
+ * @return The status word, with every unused bit 0.
+ */
+uint32_t fsm_status_pack(fsm_status_t status);
+
+/**
+ * Unpack a status word into its fields. Unused bits are ignored. Asserts
+ * that the word holds a valid state.
+ *
+ * @param word The status word.
+ * @return The fields held in the word.
+ */
+fsm_status_t fsm_status_unpack(uint32_t word);
 
 /**
  * Get the name of a state. Asserts that state is in range.

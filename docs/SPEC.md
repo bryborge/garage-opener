@@ -109,3 +109,36 @@ The motor LEDs and the RGB LED depend only on the state.
 | `OPEN` | off | off | Blue | 0, 0, 255 |
 | `CLOSING` | off | on | Magenta | 255, 0, 255 |
 | `OBSTRUCTED` | off | off | Red | 255, 0, 0 |
+
+## Status word
+
+The status word is one 32-bit value that summarizes the machine on a tick. It is printed in the trace and stored with each record.
+
+| Bits | Field |
+|---|---|
+| 0 to 2 | The state |
+| 3 | Unused |
+| 4 | `MOTOR_UP` is on |
+| 5 | `MOTOR_DOWN` is on |
+| 6 | The freeze guard is active |
+| 7 to 31 | Unused |
+
+Unused bits are always 0.
+
+The state is stored as its number:
+
+| State | Value |
+|---|---|
+| `CLOSED` | 0 |
+| `OPENING` | 1 |
+| `OPEN` | 2 |
+| `CLOSING` | 3 |
+| `OBSTRUCTED` | 4 |
+
+Bit 3 is left unused intentionally. It puts the state in the low hex digit and the three flags in the next one, so the word can be read without decoding it. For example:
+
+| Status word | Meaning |
+|---|---|
+| `0x00000011` | `OPENING`, with `MOTOR_UP` on |
+| `0x00000023` | `CLOSING`, with `MOTOR_DOWN` on |
+| `0x00000040` | `CLOSED`, with the freeze guard active |

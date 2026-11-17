@@ -86,7 +86,7 @@ int main(void) {
             .barrier_blocked = (switches & SW_LIGHT_BARRIER) != 0,
             .temp_c          = reading.temp_c,
         };
-        fsm_report_t report;  // Not used until the event history exists.
+        fsm_report_t report;
         fsm_tick(&fsm, &inputs, &report);
 
         /* Write the outputs. */
@@ -107,9 +107,18 @@ int main(void) {
             return 1;
         }
 
-        printf("tick=%-2d state=%-10s temp=%.1f rh=%.1f leds=0x%" PRIX32 "\n",
+        /* Summarize the tick. */
+        const uint32_t status = fsm_status_pack((fsm_status_t){
+            .state               = fsm.state,
+            .motor_up            = outputs.motor_up,
+            .motor_down          = outputs.motor_down,
+            .freeze_guard_active = report.freeze_guard_active,
+        });
+
+        printf("tick=%-2d state=%-10s temp=%.1f rh=%.1f leds=0x%" PRIX32
+            " status=0x%08" PRIX32 "\n",
             tick, fsm_state_name(fsm.state), reading.temp_c, reading.rh_pct,
-            leds);
+            leds, status);
     }
 
     return 0;

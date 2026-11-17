@@ -26,7 +26,7 @@ garage_dep = declare_dependency(
 )
 
 # The main program
-executable('garage_opener', 'src/main.c',
+garage_opener = executable('garage_opener', 'src/main.c',
     dependencies : garage_dep,
 )
 
@@ -43,3 +43,22 @@ test_fsm = executable('test_fsm', 'tests/test_fsm.c',
 )
 test('sensor', test_sensor)
 test('fsm', test_fsm)
+
+# Scenario tests: replay each scenario and compare the output with its
+# expected output.
+run_scenario = find_program('tests/run_scenario.sh')
+foreach name : [
+    'normal',
+    'thresholds',
+    'freeze_guard',
+    'unexpected_input',
+    'midnight',
+]
+    test('scenario ' + name, run_scenario,
+        args : [
+            garage_opener,
+            files('scenarios' / name + '.txt'),
+            files('scenarios' / 'expected' / name + '_output.txt'),
+        ],
+    )
+endforeach

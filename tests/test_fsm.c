@@ -20,6 +20,36 @@ void setUp(void) {}
 void tearDown(void) {}
 
 /**
+ * A new machine starts closed; remote off.
+ */
+static void test_fsm_init_starts_closed_and_at_rest(void) {
+    const fsm_t fsm = fsm_init();
+
+    TEST_ASSERT_STATE(CLOSED, fsm.state);
+    TEST_ASSERT_FALSE(fsm.remote_was_on);
+    TEST_ASSERT_EQUAL_INT(0, fsm.position);
+    TEST_ASSERT_EQUAL_INT(0, fsm.pause_ticks_left);
+}
+
+/**
+ * Every cell of the transition table is filled in. A cell left out of the
+ * table's initializer is zeroed, which gives it the action A_UNDEFINED.
+ */
+static void test_fsm_step_has_no_undefined_transition(void) {
+    for (int s = 0; s < N_STATES; s++) {
+        for (int e = 0; e < N_EVENTS; e++) {
+            action_t action;
+            fsm_step((state_t)s, (event_t)e, &action);
+
+            char cell[48];
+            snprintf(cell, sizeof cell, "state %s, event %d",
+                fsm_state_name((state_t)s), e);
+            TEST_ASSERT_NOT_EQUAL_INT_MESSAGE(A_UNDEFINED, action, cell);
+        }
+    }
+}
+
+/**
  * Normal operation: Remote press opens the initially closed garage door.
  * Once it is open, a second remote press closes it again. No logged events.
  *
@@ -162,36 +192,6 @@ static void test_fsm_step_press_ignored_when_obstructed(void) {
     state = fsm_step(OBSTRUCTED, E_REMOTE_PRESSED_FREEZING, &action);
     TEST_ASSERT_STATE(OBSTRUCTED, state);
     TEST_ASSERT_EQUAL_INT(A_NONE, action);
-}
-
-/**
- * Every cell of the transition table is filled in. A cell left out of the
- * table's initializer is zeroed, which gives it the action A_UNDEFINED.
- */
-static void test_fsm_step_has_no_undefined_transition(void) {
-    for (int s = 0; s < N_STATES; s++) {
-        for (int e = 0; e < N_EVENTS; e++) {
-            action_t action;
-            fsm_step((state_t)s, (event_t)e, &action);
-
-            char cell[48];
-            snprintf(cell, sizeof cell, "state %s, event %d",
-                fsm_state_name((state_t)s), e);
-            TEST_ASSERT_NOT_EQUAL_INT_MESSAGE(A_UNDEFINED, action, cell);
-        }
-    }
-}
-
-/**
- * A new machine starts closed; remote off.
- */
-static void test_fsm_init_starts_closed_and_at_rest(void) {
-    const fsm_t fsm = fsm_init();
-
-    TEST_ASSERT_STATE(CLOSED, fsm.state);
-    TEST_ASSERT_FALSE(fsm.remote_was_on);
-    TEST_ASSERT_EQUAL_INT(0, fsm.position);
-    TEST_ASSERT_EQUAL_INT(0, fsm.pause_ticks_left);
 }
 
 /**
@@ -402,6 +402,8 @@ static void test_fsm_tick_freeze_guard_active_when_closed_and_cold(void) {
 
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_fsm_init_starts_closed_and_at_rest);
+    RUN_TEST(test_fsm_step_has_no_undefined_transition);
     RUN_TEST(test_fsm_step_normal_operation);
     RUN_TEST(test_fsm_step_obstruction_while_closing);
     RUN_TEST(test_fsm_step_freezing_press_refused_when_closed);
@@ -409,8 +411,6 @@ int main(void) {
     RUN_TEST(test_fsm_step_freezing_press_allowed_when_not_closed);
     RUN_TEST(test_fsm_step_barrier_ignored_when_not_closing);
     RUN_TEST(test_fsm_step_press_ignored_when_obstructed);
-    RUN_TEST(test_fsm_step_has_no_undefined_transition);
-    RUN_TEST(test_fsm_init_starts_closed_and_at_rest);
     RUN_TEST(test_fsm_tick_press_opens_door_in_15_ticks);
     RUN_TEST(test_fsm_tick_press_closes_door_in_15_ticks);
     RUN_TEST(test_fsm_tick_held_remote_is_one_press);

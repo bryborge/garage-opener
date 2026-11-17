@@ -2,9 +2,11 @@
 
 This is the final project for ECE361 - Computer System Organization at Portland State University. It is an embedded system designed to behave like a garage door opener. It uses the `iom361` library, version 4.0 (r4), built specifically for this class to imitate an I/O device attached to a microcontroller.
 
-## Specification
+## Assignment and Specification
 
-The project assignment details are captured in the assignment document found in [docs/SPEC.md](docs/ASSIGNMENT.md).
+The project assignment details are captured in the assignment document found in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md).
+
+The project spec can be found in [docs/SPEC.md](docs/SPEC.md).
 
 ## Getting Started
 

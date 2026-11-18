@@ -88,7 +88,7 @@ fsm_t fsm_init(void) {
  * Feed one event to the transition table, then update the machine and the
  * report from the result.
  */
-static void apply(fsm_t *fsm, event_t event, fsm_report_t *report) {
+static void dispatch(fsm_t *fsm, event_t event, fsm_report_t *report) {
     action_t action;
     const state_t next = fsm_step(fsm->state, event, &action);
 
@@ -126,7 +126,7 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report) {
 
     /* 1. Barrier check. */
     if (inputs->barrier_blocked) {
-        apply(fsm, E_BARRIER_BLOCKED, report);
+        dispatch(fsm, E_BARRIER_BLOCKED, report);
     }
 
     /*
@@ -154,7 +154,7 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report) {
                 break;
         }
 
-        if (complete) apply(fsm, E_TIMER_EXPIRED, report);
+        if (complete) dispatch(fsm, E_TIMER_EXPIRED, report);
     }
 
     /* 3. Remote check. on now, off before. */
@@ -163,7 +163,7 @@ void fsm_tick(fsm_t *fsm, const fsm_inputs_t *inputs, fsm_report_t *report) {
 
     if (pressed) {
         report->remote_pressed = true;
-        apply(fsm,
+        dispatch(fsm,
             freezing ? E_REMOTE_PRESSED_FREEZING : E_REMOTE_PRESSED,
             report);
     }

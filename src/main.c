@@ -13,6 +13,7 @@
 
 #include "iom361_r4.h"
 
+#include "aux.h"
 #include "fsm.h"
 #include "sensor.h"
 
@@ -172,11 +173,15 @@ static int scenario_read_change(scenario_t *scenario, world_t *change) {
 
 /**
  * Run the device for one tick: read the inputs, run the state machine, write
- * the outputs, and print a trace line.
+ * the outputs, record what happened in the history, and print a trace line.
  *
  * @return 0 on success, or 1 after reporting an error.
  */
-static int run_tick(uint32_t *base, fsm_t *fsm, time_t now) {
+static int run_tick(
+    uint32_t *base, fsm_t *fsm, history_t *history, time_t start, int tick
+) {
+    const time_t now = start + tick;
+
     /* Read the inputs. */
     reading_t reading;
     int rc = sensor_read(base, now, &reading);
@@ -218,6 +223,32 @@ static int run_tick(uint32_t *base, fsm_t *fsm, time_t now) {
         return 1;
     }
 
+    /* Record what happened in the order fsm_tick handled it. */
+    if (report.obstruction_detected) {
+        const history_entry_t entry = { .kind = H_OBSTRUCTION, .tick = tick };
+        if (history_push(history, entry) != 0) {
+            fprintf(stderr,
+                "recording the obstruction failed: out of memory\n");
+            return 1;
+        }
+    }
+
+    if (report.remote_pressed) {
+        const history_entry_t entry = { .kind = H_PRESS, .tick = tick };
+        if (history_push(history, entry) != 0) {
+            fprintf(stderr, "recording the press failed: out of memory\n");
+            return 1;
+        }
+    }
+
+    if (report.press_refused) {
+        const history_entry_t entry = { .kind = H_REFUSAL, .tick = tick };
+        if (history_push(history, entry) != 0) {
+            fprintf(stderr, "recording the refusal failed: out of memory\n");
+            return 1;
+        }
+    }
+
     /* Summarize the tick. */
     const uint32_t status = fsm_status_pack((fsm_status_t){
         .state               = fsm->state,
@@ -246,7 +277,7 @@ static int run_tick(uint32_t *base, fsm_t *fsm, time_t now) {
  *
  * @return 0 on success, or 1 after reporting an error.
  */
-static int replay(scenario_t *scenario, uint32_t *base) {
+static int replay(scenario_t *scenario, uint32_t *base, history_t *history) {
     time_t start;
     if (!scenario_read_start(scenario, &start)) return 1;
 
@@ -269,7 +300,7 @@ static int replay(scenario_t *scenario, uint32_t *base) {
             }
         }
 
-        if (run_tick(base, &fsm, start + tick) != 0) return 1;
+        if (run_tick(base, &fsm, history, start, tick) != 0) return 1;
     }
 
     return more == 0 ? 0 : 1;
@@ -301,7 +332,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    rc = replay(&scenario, base);
+    history_t *history = history_create();
+    if (history == NULL) {
+        fprintf(stderr, "creating the history failed: out of memory\n");
+        fclose(scenario.file);
+        return 1;
+    }
+
+    rc = replay(&scenario, base, history);
+    history_destroy(history);
     fclose(scenario.file);
 
     return rc;

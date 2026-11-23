@@ -16,6 +16,7 @@
 #include "aux.h"
 #include "fsm.h"
 #include "sensor.h"
+#include "store.h"
 
 /* Switch register bits. */
 #define SW_REMOTE        (1u << 0)
@@ -183,12 +184,14 @@ static int scenario_read_change(scenario_t *scenario, world_t *change) {
 
 /**
  * Run the device for one tick: read the inputs, run the state machine, write
- * the outputs, record what happened in the history, and print a trace line.
+ * the outputs, store a record, record what happened in the history, and print
+ * a trace line.
  *
  * @return 0 on success, or 1 after reporting an error.
  */
 static int run_tick(
-    uint32_t *base, fsm_t *fsm, history_t *history, time_t start, int tick
+    uint32_t *base, fsm_t *fsm, store_t *store, history_t *history,
+    time_t start, int tick
 ) {
     const time_t now = start + tick;
 
@@ -233,6 +236,24 @@ static int run_tick(
         return 1;
     }
 
+    /* Store a record of the tick. */
+    const uint32_t status = fsm_status_pack((fsm_status_t){
+        .state               = fsm->state,
+        .motor_up            = outputs.motor_up,
+        .motor_down          = outputs.motor_down,
+        .freeze_guard_active = report.freeze_guard_active,
+    });
+
+    const record_t record = {
+        .reading = reading,
+        .state   = fsm->state,
+        .status  = status,
+    };
+    if (store_insert(store, &record) != 0) {
+        fprintf(stderr, "storing the record failed: out of memory\n");
+        return 1;
+    }
+
     /* Record what happened in the order fsm_tick handled it. */
     if (report.obstruction_detected) {
         const history_entry_t entry = { .kind = H_OBSTRUCTION, .tick = tick };
@@ -259,14 +280,7 @@ static int run_tick(
         }
     }
 
-    /* Summarize the tick. */
-    const uint32_t status = fsm_status_pack((fsm_status_t){
-        .state               = fsm->state,
-        .motor_up            = outputs.motor_up,
-        .motor_down          = outputs.motor_down,
-        .freeze_guard_active = report.freeze_guard_active,
-    });
-
+    /* Print the trace line. */
     char timestamp[20];
     rc = sensor_format_timestamp(reading.timestamp, timestamp);
     if (rc != 0) {
@@ -316,7 +330,9 @@ static int run_tick(
  *
  * @return 0 on success, or 1 after reporting an error.
  */
-static int replay(scenario_t *scenario, uint32_t *base, history_t *history) {
+static int replay(
+    scenario_t *scenario, uint32_t *base, store_t *store, history_t *history
+) {
     time_t start;
     if (!scenario_read_start(scenario, &start)) return 1;
 
@@ -339,7 +355,7 @@ static int replay(scenario_t *scenario, uint32_t *base, history_t *history) {
             }
         }
 
-        if (run_tick(base, &fsm, history, start, tick) != 0) return 1;
+        if (run_tick(base, &fsm, store, history, start, tick) != 0) return 1;
     }
 
     return more == 0 ? 0 : 1;
@@ -378,7 +394,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    rc = replay(&scenario, base, history);
+    store_t *store = store_create();
+    if (store == NULL) {
+        fprintf(stderr, "creating the store failed: out of memory\n");
+        history_destroy(history);
+        fclose(scenario.file);
+        return 1;
+    }
+
+    rc = replay(&scenario, base, store, history);
+    store_destroy(store);
     history_destroy(history);
     fclose(scenario.file);
 

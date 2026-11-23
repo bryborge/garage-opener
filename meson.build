@@ -15,7 +15,8 @@ math_dep = meson.get_compiler('c').find_library('m', required : false)
 
 # Modules
 garage_inc = include_directories('include/garage_opener')
-garage_lib = static_library('garage', 'src/sensor.c', 'src/fsm.c', 'src/aux.c',
+garage_lib = static_library('garage',
+    'src/sensor.c', 'src/fsm.c', 'src/aux.c', 'src/store.c',
     include_directories : garage_inc,
     dependencies : [iom361_dep, math_dep],
 )
@@ -46,9 +47,13 @@ test_aux = executable('test_aux', 'tests/test_aux.c',
     dependencies : [garage_dep, unity_dep],
     link_args : '-Wl,--wrap=realloc',
 )
+test_store = executable('test_store', 'tests/test_store.c',
+    dependencies : [garage_dep, unity_dep],
+)
 test('sensor', test_sensor)
 test('fsm', test_fsm)
 test('aux', test_aux)
+test('store', test_store)
 
 # Scenario tests: replay each scenario and compare the output with its
 # expected output.

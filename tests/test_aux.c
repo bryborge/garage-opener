@@ -53,6 +53,22 @@ static void test_history_create_starts_empty(void) {
 }
 
 /**
+ * A history is empty when new, not empty after a push, and empty again after
+ * that entry is popped.
+ */
+static void test_history_is_empty_follows_entries(void) {
+    TEST_ASSERT_TRUE(history_is_empty(history));
+
+    const history_entry_t pushed = { .kind = H_PRESS, .tick = 1 };
+    TEST_ASSERT_EQUAL_INT(0, history_push(history, pushed));
+    TEST_ASSERT_FALSE(history_is_empty(history));
+
+    history_entry_t popped;
+    TEST_ASSERT_EQUAL_INT(0, history_pop(history, &popped));
+    TEST_ASSERT_TRUE(history_is_empty(history));
+}
+
+/**
  * A push adds one entry.
  */
 static void test_history_push_adds_an_entry(void) {
@@ -97,11 +113,96 @@ static void test_history_push_doubles_room_when_full(void) {
     TEST_ASSERT_EQUAL_size_t(17, history_count(history));
 }
 
+/**
+ * Peeking at an empty history fails and leaves the caller's entry as it was.
+ */
+static void test_history_peek_fails_when_empty(void) {
+    history_entry_t entry = { .kind = H_OBSTRUCTION, .tick = 42 };
+
+    TEST_ASSERT_EQUAL_INT(1, history_peek(history, &entry));
+    TEST_ASSERT_EQUAL_INT(H_OBSTRUCTION, entry.kind);
+    TEST_ASSERT_EQUAL_INT(42, entry.tick);
+}
+
+/**
+ * Peeking gets the most recent entry and leaves it in the history.
+ */
+static void test_history_peek_gets_top_without_removing_it(void) {
+    const history_entry_t first = { .kind = H_PRESS, .tick = 3 };
+    const history_entry_t second = { .kind = H_REFUSAL, .tick = 7 };
+    TEST_ASSERT_EQUAL_INT(0, history_push(history, first));
+    TEST_ASSERT_EQUAL_INT(0, history_push(history, second));
+
+    history_entry_t entry;
+    TEST_ASSERT_EQUAL_INT(0, history_peek(history, &entry));
+    TEST_ASSERT_EQUAL_INT(H_REFUSAL, entry.kind);
+    TEST_ASSERT_EQUAL_INT(7, entry.tick);
+
+    TEST_ASSERT_EQUAL_size_t(2, history_count(history));
+}
+
+/**
+ * Popping an empty history fails and leaves the caller's entry as it was.
+ */
+static void test_history_pop_fails_when_empty(void) {
+    history_entry_t entry = { .kind = H_OBSTRUCTION, .tick = 42 };
+
+    TEST_ASSERT_EQUAL_INT(1, history_pop(history, &entry));
+    TEST_ASSERT_EQUAL_INT(H_OBSTRUCTION, entry.kind);
+    TEST_ASSERT_EQUAL_INT(42, entry.tick);
+}
+
+/**
+ * After the history has grown, entries still come off in the reverse of the
+ * order they went on: last in, first out.
+ */
+static void test_history_pop_is_last_in_first_out_after_growing(void) {
+    /* 9 pushes: one more than the starting room of 8. */
+    for (int tick = 0; tick < 9; tick++) {
+        const history_entry_t entry = { .kind = H_PRESS, .tick = tick };
+        TEST_ASSERT_EQUAL_INT(0, history_push(history, entry));
+    }
+    TEST_ASSERT_EQUAL_size_t(1, realloc_calls);
+
+    for (int tick = 8; tick >= 0; tick--) {
+        history_entry_t entry;
+        TEST_ASSERT_EQUAL_INT(0, history_pop(history, &entry));
+        TEST_ASSERT_EQUAL_INT(H_PRESS, entry.kind);
+        TEST_ASSERT_EQUAL_INT(tick, entry.tick);
+    }
+
+    history_entry_t entry;
+    TEST_ASSERT_EQUAL_INT(1, history_pop(history, &entry));
+    TEST_ASSERT_EQUAL_size_t(0, history_count(history));
+}
+
+/**
+ * Destroying a history that still holds entries, after it has grown, frees
+ * everything. LeakSanitizer fails the test at exit if anything is left.
+ */
+static void test_history_destroy_frees_a_history_with_entries(void) {
+    for (int tick = 0; tick < 9; tick++) {
+        const history_entry_t entry = { .kind = H_PRESS, .tick = tick };
+        TEST_ASSERT_EQUAL_INT(0, history_push(history, entry));
+    }
+
+    history_destroy(history);
+
+    /* Already destroyed: tearDown's history_destroy(NULL) does nothing. */
+    history = NULL;
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_history_create_starts_empty);
+    RUN_TEST(test_history_is_empty_follows_entries);
     RUN_TEST(test_history_push_adds_an_entry);
     RUN_TEST(test_history_push_doubles_room_when_full);
+    RUN_TEST(test_history_peek_fails_when_empty);
+    RUN_TEST(test_history_peek_gets_top_without_removing_it);
+    RUN_TEST(test_history_pop_fails_when_empty);
+    RUN_TEST(test_history_pop_is_last_in_first_out_after_growing);
+    RUN_TEST(test_history_destroy_frees_a_history_with_entries);
 
     return UNITY_END();
 }

@@ -5,6 +5,7 @@
 #ifndef AUX_H
 #define AUX_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 typedef enum {
@@ -48,6 +49,14 @@ void history_destroy(history_t *history);
 size_t history_count(const history_t *history);
 
 /**
+ * Check whether a history has no entries. Asserts that history is not NULL.
+ *
+ * @param history The history to check.
+ * @return true if the history has no entries.
+ */
+bool history_is_empty(const history_t *history);
+
+/**
  * Push an entry onto the top of a history. If the history is full, its room
  * doubles first. Asserts that history is not NULL.
  *
@@ -57,5 +66,26 @@ size_t history_count(const history_t *history);
  *         not be allocated. The history is unchanged on failure.
  */
 int history_push(history_t *history, history_entry_t entry);
+
+/**
+ * Get the entry on top of a history without removing it. Asserts that no
+ * argument is NULL.
+ *
+ * @param history The history to look at.
+ * @param entry   Where the entry is stored. Not written if the history is
+ *                empty.
+ * @return 0 on success, or 1 if the history is empty.
+ */
+int history_peek(const history_t *history, history_entry_t *entry);
+
+/**
+ * Remove the entry on top of a history. Asserts that no argument is NULL.
+ *
+ * @param history The history to remove from.
+ * @param entry   Where the removed entry is stored. Not written if the
+ *                history is empty.
+ * @return 0 on success, or 1 if the history is empty.
+ */
+int history_pop(history_t *history, history_entry_t *entry);
 
 #endif

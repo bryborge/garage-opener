@@ -6,6 +6,7 @@
  * index count - 1, so a push or a pop touches only the end of the array.
  */
 #include <assert.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -49,6 +50,12 @@ size_t history_count(const history_t *history) {
     return history->count;
 }
 
+bool history_is_empty(const history_t *history) {
+    assert(history != NULL);
+
+    return history->count == 0;
+}
+
 int history_push(history_t *history, history_entry_t entry) {
     assert(history != NULL);
 
@@ -69,6 +76,29 @@ int history_push(history_t *history, history_entry_t entry) {
 
     history->entries[history->count] = entry;
     history->count++;
+
+    return 0;
+}
+
+int history_peek(const history_t *history, history_entry_t *entry) {
+    assert(history != NULL);
+    assert(entry != NULL);
+
+    if (history_is_empty(history)) return 1;
+
+    *entry = history->entries[history->count - 1];
+
+    return 0;
+}
+
+int history_pop(history_t *history, history_entry_t *entry) {
+    assert(history != NULL);
+    assert(entry != NULL);
+
+    if (history_is_empty(history)) return 1;
+
+    history->count--;
+    *entry = history->entries[history->count];
 
     return 0;
 }

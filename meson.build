@@ -55,6 +55,7 @@ test('aux', test_aux)
 run_scenario = find_program('tests/run_scenario.sh')
 foreach name : [
     'normal',
+    'growth',
     'thresholds',
     'freeze_guard',
     'unexpected_input',

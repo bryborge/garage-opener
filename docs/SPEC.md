@@ -4,7 +4,7 @@ This document records the design decisions for the garage door opener.
 
 ## Decisions
 
-The assignment's three operating rules leave several cases open. The decisions about the remote, the freeze guard, the light barrier, and timing are implemented in `src/fsm.c`. The decisions about the event history are implemented in `src/main.c`.
+The assignment's three operating rules leave several cases open. The decisions about the remote, the freeze guard, the light barrier, and timing are implemented in `src/fsm.c`. The decisions about the event history and the record store are implemented in `src/main.c`.
 
 ### Remote
 
@@ -82,6 +82,12 @@ A stack only lets you see its top. To print 3 entries, `main` pops them off and 
 #### When the history can't grow
 
 If a push fails because the history is full and more memory can't be allocated, `main` reports it and the replay stops. This is the same as every other failure during a tick. Carrying on would leave a history that no longer matches what happened, and anything printed from it afterward would be wrong without anyone knowing.
+
+### Record store
+
+#### When the store can't grow
+
+If storing a record fails because more memory can't be allocated, `main` reports it and the replay stops, for the same reasons as [when the history can't grow](#when-the-history-cant-grow).
 
 ## Events
 
@@ -200,6 +206,44 @@ The other common way to build a stack is a linked list, where each entry sits in
 | Memory per entry | 8 bytes, with up to half the room unused right after a doubling | 16 bytes per node (the entry and its pointer), which `malloc` turns into a 24-byte block on this computer, plus its own bookkeeping |
 
 The linked list's one real advantage is that no push ever has to copy anything, so every push takes the same time. That would matter if the device had a hard deadline on every tick. This one doesn't. The array wins on everything else. It uses less memory. It allocates rarely instead of on every push, so there are only a few points where memory can run out, and the heap doesn't fill up with small blocks. The entries also sit next to each other in memory, which makes reading them faster. And the history mostly grows. Pops happen only while printing, and those entries are pushed straight back, so the list's cheap pop doesn't buy anything here.
+
+## Record store
+
+Every tick, `main` stores a record of it. The store is a binary search tree, ordered by temperature.
+
+### The record
+
+| Field | What it holds |
+|---|---|
+| `reading` | The timestamp, the temperature, and the humidity |
+| `state` | The state at the end of the tick |
+| `status` | The status word, the same one printed in the trace |
+
+The store keeps its own copy of every record, so the record `main` builds on each tick can go away as soon as it's stored.
+
+### The key
+
+The tree is ordered by temperature in 0.5 °C steps. Each step starts at a multiple of 0.5 °C and runs up to, but not including, the next one. For example:
+
+- 21.2 and 21.4 °C share the step from 21.0 °C.
+- 21.5 °C is on a boundary, so it starts the next step.
+- -0.2 °C is in the step from -0.5 °C, not the step from 0.0 °C.
+
+To find a temperature's step, `record_compare` doubles it, which makes each step 1 wide, and rounds down with `floorf`. Rounding to the nearest step wouldn't work, because it would put 21.2 and 21.4 °C in different steps. Rounding down has to apply to negative temperatures too. Converting to an `int` would round toward zero instead, and put -0.4 and 0.4 °C in the same step.
+
+Floating-point error can't move a reading into the wrong step. Every boundary is a multiple of 0.5, which a float holds exactly, and `sensor.c` rounds every reading to 0.1 °C. So a reading is either exactly on a boundary or at least 0.1 °C away from one, and the error in a value like 20.9 is around a millionth of a degree.
+
+### Duplicate keys
+
+A garage's temperature hardly changes from one second to the next, so a replay stores long runs of records with the same key. The normal scenario stores 38 records, all at 15.0 °C.
+
+Each key gets one node, and the node keeps every record with that key in an array, oldest first. The array starts with room for 1 record and doubles when it's full, the same way the event history grows. Records with a new key get a new node. Records with a key that's already in the tree go on the end of that node's array.
+
+The simpler way to handle duplicates is to give every record its own node and send equal keys to the right. That keeps every record too, but with this data, a run at one temperature lines up into a chain: 100 records at 15.0 °C would make a tree 100 nodes tall. Every insert and every search would walk the whole chain, and the recursive functions would go as deep as the chain is long. With one node per key, those 100 records make a tree 1 node tall.
+
+Keeping each array oldest first means records with the same key come out of a search, and out of the walk, in the order they were stored. That's time order.
+
+This doesn't keep the tree balanced. A temperature that rises or falls steadily through many steps still makes a chain, the same way inserting keys in sorted order does. But that chain can only be as long as the number of different steps the temperature passes through, about 200 between -40 and 60 °C, not the number of ticks.
 
 ## The year 2038
 

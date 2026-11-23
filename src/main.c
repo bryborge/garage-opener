@@ -25,6 +25,16 @@
 #define LED_MOTOR_UP     (1u << 0)
 #define LED_MOTOR_DOWN   (1u << 1)
 
+/* The number of history entries printed on an obstruction. */
+#define OBSTRUCTION_HISTORY 3
+
+/* History kinds, as printed. */
+static const char *const history_kind_names[] = {
+    [H_PRESS]       = "PRESS",
+    [H_REFUSAL]     = "REFUSAL",
+    [H_OBSTRUCTION] = "OBSTRUCTION",
+};
+
 /* Scenario file ------------------------------------------------------------ */
 
 #define LINE_SIZE 256
@@ -268,6 +278,35 @@ static int run_tick(
         " status=0x%08" PRIX32 "\n",
         timestamp, fsm_state_name(fsm->state), reading.temp_c,
         reading.rh_pct, leds, status);
+
+    /*
+     * On an obstruction, print the most recent entries, top first. Popping is
+     * the only way to see below the top, so they are pushed back afterwards
+     * in reverse order, leaving the history as it was.
+     */
+    if (report.obstruction_detected) {
+        history_entry_t last[OBSTRUCTION_HISTORY];
+        size_t popped = 0;
+
+        while (popped < OBSTRUCTION_HISTORY
+               && history_pop(history, &last[popped]) == 0) {
+            popped++;
+        }
+
+        for (size_t i = 0; i < popped; i++) {
+            printf("  history tick=%d event=%s\n",
+                last[i].tick, history_kind_names[last[i].kind]);
+        }
+
+        while (popped > 0) {
+            popped--;
+            if (history_push(history, last[popped]) != 0) {
+                fprintf(stderr,
+                    "restoring the history failed: out of memory\n");
+                return 1;
+            }
+        }
+    }
 
     return 0;
 }

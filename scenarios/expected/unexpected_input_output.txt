@@ -27,6 +27,9 @@
 2026-10-06 08:00:26 state=CLOSING temp=15.0 rh=60.0 leds=0x2 status=0x00000023
 2026-10-06 08:00:27 state=CLOSING temp=15.0 rh=60.0 leds=0x2 status=0x00000023
 2026-10-06 08:00:28 state=OBSTRUCTED temp=15.0 rh=60.0 leds=0x0 status=0x00000004
+  history tick=28 event=OBSTRUCTION
+  history tick=25 event=PRESS
+  history tick=9 event=PRESS
 2026-10-06 08:00:29 state=OBSTRUCTED temp=15.0 rh=60.0 leds=0x0 status=0x00000004
 2026-10-06 08:00:30 state=OPENING temp=15.0 rh=60.0 leds=0x1 status=0x00000011
 2026-10-06 08:00:31 state=OPENING temp=15.0 rh=60.0 leds=0x1 status=0x00000011

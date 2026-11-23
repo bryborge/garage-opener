@@ -198,3 +198,59 @@ size_t store_height(const store_t *store) {
 
     return height_subtree(store->root);
 }
+
+int store_find(
+    const store_t *store, const record_t *key,
+    const record_t **records, size_t *count
+) {
+    assert(store != NULL);
+    assert(key != NULL);
+    assert(records != NULL);
+    assert(count != NULL);
+
+    const struct node *node = store->root;
+
+    while (node != NULL) {
+        const int order = record_compare(key, &node->records[0]);
+
+        if (order < 0) {
+            node = node->left;
+        } else if (order > 0) {
+            node = node->right;
+        } else {
+            *records = node->records;
+            *count = node->count;
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+/* Visit every record in the subtree rooted at node, in key order. */
+static void walk_subtree(
+    const struct node *node,
+    void (*visit)(const record_t *record, void *context),
+    void *context
+) {
+    if (node == NULL) return;
+
+    walk_subtree(node->left, visit, context);
+
+    for (size_t i = 0; i < node->count; i++) {
+        visit(&node->records[i], context);
+    }
+
+    walk_subtree(node->right, visit, context);
+}
+
+void store_walk(
+    const store_t *store,
+    void (*visit)(const record_t *record, void *context),
+    void *context
+) {
+    assert(store != NULL);
+    assert(visit != NULL);
+
+    walk_subtree(store->root, visit, context);
+}
